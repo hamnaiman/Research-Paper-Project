@@ -4,10 +4,12 @@ python-multipart==0.0.9
 python-dotenv==1.0.1
 
 langchain==0.3.7
-langchain-community==0.3.5
 langchain-core==0.3.27
+langchain-community==0.3.5
 langchain-groq==0.2.1
-cohere>=5.11,<7
+langchain-chroma==0.1.4
 
 chromadb==0.5.20
+
+cohere>=5.11,<7
 pypdf==5.1.0
