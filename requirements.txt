@@ -12,4 +12,5 @@ langchain-chroma==0.1.4
 chromadb==0.5.20
 
 cohere>=5.11,<7
+
 pypdf==5.1.0

@@ -3,8 +3,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-UPLOAD_DIR = "data/uploads"
-CHROMA_DIR = "data/chroma_db"
+# Vercel-compatible temporary directories
+UPLOAD_DIR = "/tmp/uploads"
+CHROMA_DIR = "/tmp/chroma_db"
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", "")

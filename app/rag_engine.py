@@ -1,21 +1,3 @@
-"""
-rag_engine.py
--------------
-RAG pipeline using:
-
-PDF
-→ Text extraction
-→ Chunking
-→ Cohere API embeddings
-→ ChromaDB
-→ Similarity retrieval
-→ Groq LLM
-
-Cohere embeddings are accessed through the official Cohere SDK.
-No HuggingFace, SentenceTransformers, PyTorch, or local ML model is used.
-This keeps the application lightweight for Render's memory limit.
-"""
-
 import os
 from typing import List, Dict, Optional
 
@@ -33,37 +15,39 @@ from app import config
 
 
 # ============================================================
-# COHERE EMBEDDING WRAPPER
+# COHERE EMBEDDINGS
 # ============================================================
 
 class CohereAPIEmbeddings(Embeddings):
-    """
-    Lightweight LangChain-compatible wrapper around Cohere's
-    official embedding API.
-
-    No local embedding model is loaded.
-    """
 
     def __init__(self, api_key: str, model: str):
-        self._client = cohere.Client(api_key)
-        self._model = model
+        self.client = cohere.Client(api_key)
+        self.model = model
 
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    def embed_documents(
+        self,
+        texts: List[str]
+    ) -> List[List[float]]:
+
         if not texts:
             return []
 
-        response = self._client.embed(
+        response = self.client.embed(
             texts=texts,
-            model=self._model,
+            model=self.model,
             input_type="search_document",
         )
 
         return response.embeddings
 
-    def embed_query(self, text: str) -> List[float]:
-        response = self._client.embed(
+    def embed_query(
+        self,
+        text: str
+    ) -> List[float]:
+
+        response = self.client.embed(
             texts=[text],
-            model=self._model,
+            model=self.model,
             input_type="search_query",
         )
 
@@ -71,7 +55,7 @@ class CohereAPIEmbeddings(Embeddings):
 
 
 # ============================================================
-# LAZY SINGLETONS
+# LAZY OBJECTS
 # ============================================================
 
 _embeddings: Optional[CohereAPIEmbeddings] = None
@@ -83,16 +67,15 @@ _llm: Optional[ChatGroq] = None
 # EMBEDDINGS
 # ============================================================
 
-def _get_embeddings() -> CohereAPIEmbeddings:
+def _get_embeddings():
+
     global _embeddings
 
     if _embeddings is None:
 
         if not config.EMBEDDING_API_KEY:
             raise RuntimeError(
-                "Embedding API key is not configured. "
-                "Set EMBEDDING_API_KEY in your .env file locally "
-                "or in Render Environment Variables."
+                "EMBEDDING_API_KEY is not configured."
             )
 
         _embeddings = CohereAPIEmbeddings(
@@ -104,10 +87,11 @@ def _get_embeddings() -> CohereAPIEmbeddings:
 
 
 # ============================================================
-# CHROMA VECTOR STORE
+# CHROMA
 # ============================================================
 
-def _get_vectorstore() -> Chroma:
+def _get_vectorstore():
+
     global _vectorstore
 
     if _vectorstore is None:
@@ -122,18 +106,18 @@ def _get_vectorstore() -> Chroma:
 
 
 # ============================================================
-# GROQ LLM
+# GROQ
 # ============================================================
 
-def _get_llm() -> ChatGroq:
+def _get_llm():
+
     global _llm
 
     if _llm is None:
 
         if not config.GROQ_API_KEY:
             raise RuntimeError(
-                "Groq API key is not configured. "
-                "Set GROQ_API_KEY in your environment variables."
+                "GROQ_API_KEY is not configured."
             )
 
         _llm = ChatGroq(
@@ -146,30 +130,34 @@ def _get_llm() -> ChatGroq:
 
 
 # ============================================================
-# ANSWER PROMPT
+# PROMPT
 # ============================================================
 
 ANSWER_PROMPT = ChatPromptTemplate.from_template(
-    """You are a professional Research Paper Assistant. Answer the question
-using ONLY the context below, which was extracted from research papers the
-user uploaded.
+    """You are a professional Research Paper Assistant.
+
+Answer the question using ONLY the uploaded research paper
+content supplied below.
 
 Rules:
-- If the answer is not contained in the context, reply with EXACTLY this
-  sentence and nothing else: "The answer is not available in the uploaded documents."
-- Never use outside knowledge, even if you know the real-world answer.
-- Write in clean, natural English. No filler words, no unnecessary commas,
-  no repeated phrases.
-- For lists (findings, limitations, datasets, steps), use short markdown
-  bullet points starting with "- ". One clear idea per bullet.
-- For a plain explanation, write 2-4 short sentences. No walls of text.
-- Never mention "the context" or "the provided text" in your answer.
-- Just answer as if you already know the paper.
+
+- If the answer is not contained in the uploaded documents,
+  reply EXACTLY:
+
+"The answer is not available in the uploaded documents."
+
+- Never use outside knowledge.
+- Keep answers concise.
+- Use short markdown bullet points for lists.
+- For normal explanations, use 2-4 short sentences.
+- Never mention "the context" or "provided text".
 
 Context:
+
 {context}
 
 Question:
+
 {question}
 
 Answer:"""
@@ -177,17 +165,18 @@ Answer:"""
 
 
 # ============================================================
-# GET UPLOADED PDF FILES
+# FILES
 # ============================================================
 
-def get_uploaded_filenames() -> List[str]:
+def get_uploaded_filenames():
+
     if not os.path.exists(config.UPLOAD_DIR):
         return []
 
     return sorted(
-        f
-        for f in os.listdir(config.UPLOAD_DIR)
-        if f.lower().endswith(".pdf")
+        file
+        for file in os.listdir(config.UPLOAD_DIR)
+        if file.lower().endswith(".pdf")
     )
 
 
@@ -195,25 +184,24 @@ def get_uploaded_filenames() -> List[str]:
 # INGEST PDF
 # ============================================================
 
-def ingest_pdf(file_path: str, filename: str) -> int:
-    """
-    Load PDF, split into chunks, create Cohere embeddings,
-    and store the vectors in ChromaDB.
-    """
+def ingest_pdf(
+    file_path: str,
+    filename: str
+) -> int:
 
-    # ----------------------------
-    # Load PDF
-    # ----------------------------
+    if not os.path.exists(file_path):
+        raise RuntimeError(
+            "Uploaded PDF could not be found."
+        )
 
     loader = PyPDFLoader(file_path)
+
     pages = loader.load()
 
     if not pages:
-        raise RuntimeError("The PDF contains no readable pages.")
-
-    # ----------------------------
-    # Split into chunks
-    # ----------------------------
+        raise RuntimeError(
+            "The PDF contains no readable pages."
+        )
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=config.CHUNK_SIZE,
@@ -224,45 +212,36 @@ def ingest_pdf(file_path: str, filename: str) -> int:
 
     if not chunks:
         raise RuntimeError(
-            "No readable text could be extracted from the PDF."
+            "No readable text was extracted from the PDF."
         )
-
-    # ----------------------------
-    # Add metadata
-    # ----------------------------
 
     for chunk in chunks:
 
         chunk.metadata["source_file"] = filename
 
         if "page" in chunk.metadata:
+
             try:
                 chunk.metadata["page"] = (
                     int(chunk.metadata["page"]) + 1
                 )
-            except (TypeError, ValueError):
+            except Exception:
                 pass
-
-    # ----------------------------
-    # Store in ChromaDB
-    # ----------------------------
 
     vectorstore = _get_vectorstore()
 
     vectorstore.add_documents(chunks)
 
-    # No vectorstore.persist() here.
-    # Modern langchain-chroma handles persistence automatically
-    # through persist_directory.
-
     return len(chunks)
 
 
 # ============================================================
-# FORMAT RETRIEVED CONTEXT
+# FORMAT CONTEXT
 # ============================================================
 
-def _format_context(docs: List[Document]) -> str:
+def _format_context(
+    docs: List[Document]
+) -> str:
 
     parts = []
 
@@ -287,18 +266,24 @@ def _format_context(docs: List[Document]) -> str:
 
 
 # ============================================================
-# ASK QUESTION
+# ANSWER
 # ============================================================
 
-def answer_question(question: str) -> Dict:
+def answer_question(
+    question: str
+) -> Dict:
 
-    if not question or not question.strip():
+    question = question.strip()
+
+    if not question:
+
         return {
             "answer": "Please enter a question.",
             "sources": [],
         }
 
     if not get_uploaded_filenames():
+
         return {
             "answer": (
                 "Please upload at least one research paper "
@@ -306,10 +291,6 @@ def answer_question(question: str) -> Dict:
             ),
             "sources": [],
         }
-
-    # ----------------------------
-    # Retrieve relevant chunks
-    # ----------------------------
 
     vectorstore = _get_vectorstore()
 
@@ -322,6 +303,7 @@ def answer_question(question: str) -> Dict:
     docs = retriever.invoke(question)
 
     if not docs:
+
         return {
             "answer": (
                 "The answer is not available in the "
@@ -330,15 +312,7 @@ def answer_question(question: str) -> Dict:
             "sources": [],
         }
 
-    # ----------------------------
-    # Build context
-    # ----------------------------
-
     context = _format_context(docs)
-
-    # ----------------------------
-    # Ask Groq
-    # ----------------------------
 
     chain = ANSWER_PROMPT | _get_llm()
 
@@ -349,54 +323,32 @@ def answer_question(question: str) -> Dict:
         }
     )
 
-    # ----------------------------
-    # Build sources
-    # ----------------------------
-
     sources = []
 
     for doc in docs:
 
-        sources.append(
-            {
-                "file": doc.metadata.get(
-                    "source_file",
-                    "unknown"
-                ),
-                "page": doc.metadata.get(
-                    "page",
-                    "?"
-                ),
-            }
-        )
+        source = {
+            "file": doc.metadata.get(
+                "source_file",
+                "unknown"
+            ),
+            "page": doc.metadata.get(
+                "page",
+                "?"
+            ),
+        }
 
-    # ----------------------------
-    # Remove duplicate sources
-    # ----------------------------
-
-    seen = set()
-    unique_sources = []
-
-    for source in sources:
-
-        key = (
-            source["file"],
-            source["page"],
-        )
-
-        if key not in seen:
-
-            seen.add(key)
-            unique_sources.append(source)
+        if source not in sources:
+            sources.append(source)
 
     return {
         "answer": response.content,
-        "sources": unique_sources,
+        "sources": sources,
     }
 
 
 # ============================================================
-# RESET KNOWLEDGE BASE
+# RESET
 # ============================================================
 
 def reset_knowledge_base():
@@ -415,6 +367,7 @@ def reset_knowledge_base():
         )
 
         if ids:
+
             vectorstore.delete(
                 ids=ids
             )
@@ -422,27 +375,25 @@ def reset_knowledge_base():
     except Exception as exc:
 
         raise RuntimeError(
-            f"Failed to reset ChromaDB: {exc}"
-        ) from exc
-
-    # ----------------------------
-    # Delete uploaded PDFs
-    # ----------------------------
-
-    for filename in get_uploaded_filenames():
-
-        file_path = os.path.join(
-            config.UPLOAD_DIR,
-            filename
+            f"Failed to reset knowledge base: {exc}"
         )
 
-        try:
-            os.remove(file_path)
+    if os.path.exists(config.UPLOAD_DIR):
 
-        except FileNotFoundError:
-            pass
+        for filename in os.listdir(
+            config.UPLOAD_DIR
+        ):
 
-    # Force Chroma to be recreated
-    # on the next request.
+            if filename.lower().endswith(".pdf"):
+
+                path = os.path.join(
+                    config.UPLOAD_DIR,
+                    filename
+                )
+
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
 
     _vectorstore = None
