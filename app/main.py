@@ -63,6 +63,16 @@ async def upload_paper(file: UploadFile = File(...)):
 
 @app.post("/ask")
 async def ask_question(payload: Question):
+    question = payload.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question cannot be empty.")
+
+    try:
+        result = rag_engine.answer_question(question)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return result
     """Ask a question about the uploaded papers."""
 
     # --- Graceful handling: empty question ---------------------------
