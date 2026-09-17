@@ -1,32 +1,25 @@
-"""
-config.py
----------
-All settings in one place. GROQ_API_KEY and EMBEDDING_API_KEY are read from
-environment variables only — never hardcoded, never committed to GitHub.
-"""
-
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- Folders -------------------------------------------------------------
-UPLOAD_DIR = "data/uploads"
-CHROMA_DIR = "data/chroma_db"
+# --- Folders (Vercel: sirf /tmp likhne layak hai) -------------------------
+UPLOAD_DIR = "/tmp/uploads"
+CHROMA_DIR = "/tmp/chroma_db"
 
-# --- Groq (LLM, remote — unchanged) --------------------------------------
+# --- Groq (LLM, remote) ---
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 LLM_MODEL_NAME = "openai/gpt-oss-120b"
 
-# --- Cohere (Embeddings, remote API — no local model, no PyTorch) --------
+# --- Cohere (Embeddings, remote API) ---
 EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", "")
 EMBEDDING_MODEL_NAME = "embed-english-light-v3.0"
 
-# --- Chunking --------------------------------------------------------------
+# --- Chunking ---
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 
-# --- Retrieval -------------------------------------------------------------
+# --- Retrieval ---
 TOP_K = 4
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
